@@ -6,7 +6,7 @@ library(plyr)
 library(tidyverse)
 
 #Load data for calculating countries' medical friendness
-med <- read_excel("C:/Users/tshu/Downloads/med.xls")
+med <- read_excel("tshu/med.xls")
 View(med)
 
 # paste cells into one string, use "," as separator
