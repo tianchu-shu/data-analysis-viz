@@ -10,7 +10,7 @@ med <- read_excel("C:/Users/tshu/Downloads/med.xls")
 View(med)
 
 # paste cells into one string, use "," as separator
-post.string <- paste (med$`PCV Posts Approved for Invitation [ListOfPosts_PCV]` , collapse = ",")
+post.string <- paste (med$ListOfPosts_PCV, collapse = ",")
 
 # split string at ","
 post.vector <- strsplit (post.string , "," )[[1]]
