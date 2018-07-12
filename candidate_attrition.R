@@ -8,10 +8,17 @@ library(tidyverse)
 library(readr)
 library(caret)
 library(data.table)
-library(pROC)
+library("randomForest")
+library("dummies")
+library(class)
+library(e1071)
+library(rpart)
+
 df <- read_csv("C:/Users/tshu/Downloads/Candidate Attrition _05Jul_1401.CSV")
 
-#### Data Pre-processing #####
+###########################################
+########## Data Pre-processing ############
+###########################################
 colnames(df)[1] <- "OLD_FY"
 #Combine the new and old FY col
 df$FY[!is.na(df$OLD_FY)] = df$OLD_FY[!is.na(df$OLD_FY)] 
@@ -40,7 +47,6 @@ df1 <- subset(df, FY == "FY2018" & Q != "Quarter 4")
 df2 <- subset(df, FY == "FY2015" & Q == "Quarter 4")
 df3 <- subset(df, FY == "FY2017" |FY == "FY2016")
 df <- rbind(df1, df2, df3)
-
 
 #Diversity logic
 df$Diversity[!is.na(df$Race)] <- df$Race[!is.na(df$Race)]
@@ -80,13 +86,13 @@ sum(is.na(df$EOD_Date))
 
 #Calulate the candidate attrition rate for FY16Q4 - FY18Q3
 sum(is.na(df$EOD_Date))/length(df$EOD_Date)
-#0.3751598 of the candidates who got invited ended up not enter on duty
+#0.3878271 of the candidates who got invited ended up not enter on duty
 
 #Created the dummy dependant variable EOD indicate the candidate EOD or not
 df$EOD <- ifelse(is.na(df$EOD_Date), 0 ,1)
 
 sum(df$EOD)/length(df$EOD)
-#0.6248402 of the candidates EOD
+#0.6121729 of the candidates EOD
 #Catagorize the degree type
 df <- as.data.frame(df)
 df[df$Degree_Type %like% "Bachelor", ]$Degree_Type = "Bachelor"
@@ -125,15 +131,13 @@ df$Agebin <- cut(df$Age, c(15,25,30,35,50, 81))
 summary(df$Agebin)
 
 #only keep the features we are going to use
-useful <- c("FY", "Post", "Sector", "State", "Sex", "Diversity", "Married_DP", "Serving_Spouse", "Med_Sort", "Have_you_been_arres", "Education_Level",  "Age", "Agebin", "IRT", "IRT_Score", "Language_Level", "EOD" )
+useful <- c("FY", "Post", "Sector", "State", "Sex", "Diversity", "Married_DP", "Serving_Spouse", "Med_Sort", "Have_you_been_arres", "Degree_Type", "Education_Level", "Age", "Agebin", "IRT", "IRT_Score", "Language_Level", "EOD" )
 df <- df[, (names(df) %in% useful)]
 
 
-######## Machine Learning Testing begins ##########
-library("randomForest")
-library("dummies")
-library(class)
-
+#######################################################
+########## Machine Learning Testing begins ############
+#######################################################
 head(mni)
 features <- c("FY", "Post", "Sector", "State", "Sex", "Diversity", "Married_DP", "Serving_Spouse", "Med_Sort", "Have_you_been_arres", "Education_Level",  "Age", "IRT_Score", "Language_Level", "EOD" )
 
@@ -151,42 +155,42 @@ mydata <- mydata[, !(names(mydata) %in% dcol)]
 names(mydata)
 
 #Train/Test split, using 2015-2017 to predict 2018
-train <- mydata[mydata$FY != "FY2018",]
-test <- mydata[mydata$FY == "FY2018",]
+dtrain <- mydata[mydata$FY != "FY2018",]
+dtest <- mydata[mydata$FY == "FY2018",]
 
 #Drop the FY column
-train <- train[, -c(1)]
-test <- test[, -c(1)]
+dtrain <- dtrain[, -c(1)]
+dtest <- dtest[, -c(1)]
 
 #rf_model = randomForest(target~. , data = train, ntree =500, importance = TRUE)
-train_x = train[, names(train) !='EOD']
-train_y = train[, names(train) == 'EOD']
-test_x = test[, names(test) != 'EOD']
-test_y = test[, names(test) == 'EOD']
+train_x = dtrain[, names(dtrain) !='EOD']
+train_y = dtrain[, names(dtrain) == 'EOD']
+test_x = dtest[, names(dtest) != 'EOD']
+test_y = dtest[, names(dtest) == 'EOD']
 
 #### K-Nearest Neighbor #####
-knn_pred <- knn(train = train_x, test = test_x,cl = train_y, k=10, prob=TRUE)
-result_k <- confusionMatrix(factor(knn_pred), factor(test_y), mode = "prec_recall", positive="1")
+knn_pred <- knn(train = train_x, test = test_x,cl = train_y, k=20, prob=TRUE)
+kp=attr(knn_pred,"prob")
+knnp <- ifelse(kp >=0.625, 1, 0)
+result_k <- confusionMatrix(factor(knnp), factor(test_y), mode = "prec_recall", positive="1")
 result_k
-#Precision : 0.6343          
-#Recall : 0.7399          
-#F1 : 0.6831
+#Precision : 0.6317          
+#Recall : 0.5291         
+#F1 : 0.5759
 
 # ROC area under the curve
-kp=attr(knn_pred,"prob")
 auc(test_y, kp)
-#Area under the curve: 0.5432
+#Area under the curve: 0.5723
 
-
-
+#########################
 #### Random Foreset #####
+#########################
 #rf_model = randomForest(x = train_x, y = train_y , ntree = 100, importance = TRUE)
 #these are all the different things you can call from the model.
 #view results
 #print(rf_model)
 #importance of each predictor
 #varImpPlot(rf_model)
-
 
 #rf_pred = predict(rf_model , test_x)
 
@@ -207,46 +211,76 @@ head(test)
 train <- train[, -c(1)]
 test <- test[, -c(1)]
 
+######################
 #### Naive Bayes #####
-#Tried adding post and sector, didnt have much differences
-library(e1071)
-nb <- naiveBayes(as.factor(EOD) ~ State + Sex + Married_DP + Serving_Spouse + Med_Sort + Have_you_been_arres+ Education_Level + Language_Level + Agebin + IRT, data=train, laplace = 0, subset, na.action = na.pass)
+######################
+#Tried adding post and sector, didnt have no differences
+nb <- naiveBayes(as.factor(EOD) ~  State + Sex + Married_DP + Serving_Spouse + Med_Sort + Have_you_been_arres+ Degree_Type + Language_Level + Agebin + IRT_Score, data=train, laplace = 1, threshold=0.625, eps =1, subset, na.action = na.pass)
 nb_pred <- predict(nb, test, type="class")
 nb_result <-confusionMatrix(factor(nb_pred), factor(test$EOD), mode = "prec_recall", positive="1")
 nb_result
-#Precision : 0.6173          
-#Recall : 0.9624          
-#F1 : 0.7521
+#Precision : 0.6162          
+#Recall : 0.9611          
+#F1 : 0.7510
 
 # ROC area under the curve
 auc(nb_pred, test$EOD)
-#Area under the curve: 0.6151
+#Area under the curve: 0.6067
 
 
-#### SVM #####
-svmodel <- svm(EOD ~ Sex + Married_DP + Serving_Spouse + Med_Sort + Have_you_been_arres+ Education_Level + Language_Level + Age + IRT_Score, data=train)
+###################
+####### SVM #######
+###################
+svmodel <- svm(EOD ~ State + Sex + Married_DP + Serving_Spouse + Med_Sort + Have_you_been_arres+ Degree_Type + Language_Level + Age + IRT_Score, data=train)
 svm_pred <- predict(svmodel, test, type ="C-classification")
-svm_result <-confusionMatrix(factor(svm_pred), factor(test$EOD), mode = "prec_recall", positive="1")
+svmp <- ifelse(svm_pred >=0.625, 1, 0)
+svm_result <-confusionMatrix(factor(svmp), factor(test$EOD), mode = "prec_recall", positive="1")
 svm_result
 #Precision : 0.6164          
 #Recall : 0.1755          
 #F1 : 0.2732
 
 # ROC area under the curve
-auc(svm_pred, test$EOD)
+auc(test$EOD, svm_pred)
 #Area under the curve: 1
 
+
+##############################
 #### Logistic Regression #####
-mylogit <- lm(EOD ~ State + Sex + Married_DP + Serving_Spouse + Med_Sort + Have_you_been_arres+ Education_Level + Language_Level + Age + IRT_Score, data=train)
+##############################
+mylogit <- lm(EOD ~ Sector+State + Sex + Married_DP + Serving_Spouse + Med_Sort + Have_you_been_arres+ Degree_Type + Language_Level + Age + IRT_Score, data=train)
 yl = predict(mylogit, test)
 result_logit <- confusionMatrix(factor(round(yl)), factor(test$EOD), mode = "prec_recall", positive="1")
-result_logi
-#Precision : 0.6460          
-#Recall : 0.3366          
-#F1 : 0.4426 
+result_logit
+#Precision : 0.6548          
+#Recall : 0.3550          
+#F1 : 0.4604 
+# ROC area under the curve
+auc(test$EOD, yl)
+#0.5836
+
+
+########################
+#### Decision Tree #####
+########################
+# Create the tree.
+tree <- rpart(EOD ~ State + Sex + Married_DP + Serving_Spouse + Med_Sort + Have_you_been_arres+ Degree_Type + Language_Level + Age + IRT_Score,
+              data = train,
+             method="class")
+# Plot the tree.
+fancyRpartPlot(tree)
+
+dt_pred <- predict(tree, test, type = "class")
+dt_result <- confusionMatrix(factor(dt_pred), factor(test$EOD), mode = "prec_recall", positive="1")
+dt_result
 
 # ROC area under the curve
-auc(test_y, yl)
-#0.5863
+auc(dt_pred, test$EOD)
+#0.5267
 
 
+########## Machine Learning Testing ends ############
+#####################################################
+
+#ml_result <- data.frame(PassengerId = test$PassengerId, Survived = Prediction)
+#write.csv(ml_result, file = "ml_result.csv", row.names = FALSE)
