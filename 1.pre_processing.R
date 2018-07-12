@@ -1,3 +1,7 @@
+# OAE Data Mining Project
+# Written by Tianchu Shu
+# Last Updated July 2018
+
 #First Data Expoloration
 
 #Load data for vds invitation info
