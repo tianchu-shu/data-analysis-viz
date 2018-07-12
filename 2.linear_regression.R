@@ -1,4 +1,6 @@
-#Merge Data
+# OAE Data Mining Project
+# Written by Tianchu Shu
+# Last Updated June 2018
 
 #Load data for vds invitation info
 library(caret)
