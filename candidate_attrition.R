@@ -13,7 +13,7 @@ library("dummies")
 library(class)
 library(e1071)
 library(rpart)
-
+library(pROC)
 df <- read_csv("C:/Users/tshu/Downloads/Candidate Attrition _05Jul_1401.CSV")
 
 ###########################################
@@ -170,13 +170,13 @@ test_y = dtest[, names(dtest) == 'EOD']
 
 #### K-Nearest Neighbor #####
 knn_pred <- knn(train = train_x, test = test_x,cl = train_y, k=20, prob=TRUE)
-kp=attr(knn_pred,"prob")
+kp=attr(knn_pred,"prob") 
 knnp <- ifelse(kp >=0.625, 1, 0)
 result_k <- confusionMatrix(factor(knnp), factor(test_y), mode = "prec_recall", positive="1")
-result_k
-#Precision : 0.6317          
-#Recall : 0.5291         
-#F1 : 0.5759
+result_k <-as.matrix(result_k, what = "classes")
+#Precision            0.6598480
+#Recall               0.5053715
+#F1                   0.5723701
 
 # ROC area under the curve
 auc(test_y, kp)
@@ -184,24 +184,25 @@ auc(test_y, kp)
 
 #########################
 #### Random Foreset #####
-#########################
-#rf_model = randomForest(x = train_x, y = train_y , ntree = 100, importance = TRUE)
+##########################
+rf_model = randomForest(x = train_x, y = train_y , ntree = 100, importance = TRUE)
 #these are all the different things you can call from the model.
 #view results
 #print(rf_model)
 #importance of each predictor
-#varImpPlot(rf_model)
+varImpPlot(rf_model)
 
-#rf_pred = predict(rf_model , test_x)
-
-#rf_result <- confusionMatrix(factor(round(y_pred_rf)), factor(test_y), mode = "prec_recall", positive="1")
-#rf_result
-#F1 <- (2 * precision * recall) / (precision + recall)
+rf_pred = predict(rf_model , test_x)
+rfp <- ifelse(rf_pred >=0.625, 1, 0)
+result_rf <- confusionMatrix(factor(rfp), factor(test_y), mode = "prec_recall", positive="1")
+result_rf <-as.matrix(result_rf, what = "classes")
+#Precision            0.65981735
+#Recall               0.12936437
+#F1                   0.21631737
 
 # ROC area under the curve
-#auc(test_y, rf_pred)
-#Area under the curve: 0.5096
-
+auc(test_y, rf_pred)
+#Area under the curve: 0.5048
 
 #Train/Test split, using 2016, 2017 to predict 2018
 train <- df[df$FY != "FY2018",]
@@ -217,11 +218,11 @@ test <- test[, -c(1)]
 #Tried adding post and sector, didnt have no differences
 nb <- naiveBayes(as.factor(EOD) ~  State + Sex + Married_DP + Serving_Spouse + Med_Sort + Have_you_been_arres+ Degree_Type + Language_Level + Agebin + IRT_Score, data=train, laplace = 1, threshold=0.625, eps =1, subset, na.action = na.pass)
 nb_pred <- predict(nb, test, type="class")
-nb_result <-confusionMatrix(factor(nb_pred), factor(test$EOD), mode = "prec_recall", positive="1")
-nb_result
-#Precision : 0.6162          
-#Recall : 0.9611          
-#F1 : 0.7510
+result_nb <-confusionMatrix(factor(nb_pred), factor(test$EOD), mode = "prec_recall", positive="1")
+result_nb <-as.matrix(result_nb, what = "classes")
+#Precision            0.61624569
+#Recall               0.96105640
+#F1                   0.75096187
 
 # ROC area under the curve
 auc(nb_pred, test$EOD)
@@ -231,11 +232,11 @@ auc(nb_pred, test$EOD)
 ###################
 ####### SVM #######
 ###################
-svmodel <- svm(EOD ~ State + Sex + Married_DP + Serving_Spouse + Med_Sort + Have_you_been_arres+ Degree_Type + Language_Level + Age + IRT_Score, data=train)
-svm_pred <- predict(svmodel, test, type ="C-classification")
+svmodel <- svm(EOD ~ Sector+State + Sex + Married_DP + Serving_Spouse + Med_Sort + Have_you_been_arres+ Degree_Type + Language_Level + Age + IRT_Score, data=train)
+svm_pred <- predict(svmodel, test)
 svmp <- ifelse(svm_pred >=0.625, 1, 0)
-svm_result <-confusionMatrix(factor(svmp), factor(test$EOD), mode = "prec_recall", positive="1")
-svm_result
+result_svm <-confusionMatrix(factor(svmp), factor(test$EOD), mode = "prec_recall", positive="1")
+result_svm <-as.matrix(result_svm, what = "classes")
 #Precision : 0.6164          
 #Recall : 0.1755          
 #F1 : 0.2732
@@ -251,10 +252,10 @@ auc(test$EOD, svm_pred)
 mylogit <- lm(EOD ~ Sector+State + Sex + Married_DP + Serving_Spouse + Med_Sort + Have_you_been_arres+ Degree_Type + Language_Level + Age + IRT_Score, data=train)
 yl = predict(mylogit, test)
 result_logit <- confusionMatrix(factor(round(yl)), factor(test$EOD), mode = "prec_recall", positive="1")
-result_logit
-#Precision : 0.6548          
-#Recall : 0.3550          
-#F1 : 0.4604 
+result_logit <-as.matrix(result_logit, what = "classes")
+#Precision            0.6548307
+#Recall               0.3549687
+#F1                   0.4603774
 # ROC area under the curve
 auc(test$EOD, yl)
 #0.5836
@@ -271,16 +272,18 @@ tree <- rpart(EOD ~ State + Sex + Married_DP + Serving_Spouse + Med_Sort + Have_
 fancyRpartPlot(tree)
 
 dt_pred <- predict(tree, test, type = "class")
-dt_result <- confusionMatrix(factor(dt_pred), factor(test$EOD), mode = "prec_recall", positive="1")
-dt_result
-
+result_dt <- confusionMatrix(factor(dt_pred), factor(test$EOD), mode = "prec_recall", positive="1")
+result_dt <-as.matrix(result_dt, what = "classes")
+#Precision            0.65065502
+#Recall               0.13339302
+#F1                   0.22139673
 # ROC area under the curve
 auc(dt_pred, test$EOD)
 #0.5267
 
-
+#####################################################
 ########## Machine Learning Testing ends ############
 #####################################################
 
-#ml_result <- data.frame(PassengerId = test$PassengerId, Survived = Prediction)
-#write.csv(ml_result, file = "ml_result.csv", row.names = FALSE)
+ml_result <- cbind(result_k, result_nb, result_logit, result_rf, result_dt)
+write.csv(ml_result, file = "ml_result.csv")
