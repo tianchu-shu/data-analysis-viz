@@ -1,6 +1,6 @@
 # OAE Data Mining Project
 # Written by Tianchu Shu
-# Last Updated July 2018
+#Last Updated July 2018
 
 #Some of these libraries require the latest version of R
 #Make sure your R Version is at least upgraded to 3.5.0 before running the script
@@ -22,12 +22,16 @@ df <- read_csv("C:/Users/tshu/Downloads/Candidate Attrition _05Jul_1401.CSV")
 ###########################################
 ########## Data Pre-processing ############
 ###########################################
+#Convert the old IRT score to the new one
+df$"IRT Score old"<- as.numeric(df$"IRT Score old")
+df$"IRT Score old" <- round(df$"IRT Score old"*30/48)
+
 colnames(df)[1] <- "OLD_FY"
-#Combine the new and old FY col
+#Combine the new and old FY, state and IRT score col
 df$FY[!is.na(df$OLD_FY)] = df$OLD_FY[!is.na(df$OLD_FY)] 
 
 df$State[!is.na(df$"HOR State")] = df$"HOR State"[!is.na(df$"HOR State")]
-
+df$"IRT Score"[!is.na(df$"IRT Score old")] = df$"IRT Score old"[!is.na(df$"IRT Score old")]
 names(df)
 #Drop the cols: OLD_FY, HOR State, and summary
 df<-df[, -c(1, 11, 29, 30, 35)]
@@ -96,6 +100,7 @@ df$EOD <- ifelse(is.na(df$EOD_Date), 0 ,1)
 
 sum(df$EOD)/length(df$EOD)
 #0.6121729 of the candidates EOD
+
 #Catagorize the degree type
 df <- as.data.frame(df)
 df[df$Degree_Type %like% "Bachelor", ]$Degree_Type = "Bachelor"
@@ -140,7 +145,7 @@ df <- df[, (names(df) %in% useful)]
 #######################################################
 ########## Machine Learning Testing begins ############
 #######################################################
-head(mni)
+head(df)
 features <- c("FY", "Q", "Post", "Sector", "State", "Sex", "Diversity", "Married_DP", "Serving_Spouse", "Med_Sort", "Have_you_been_arres", "Education_Level",  "Age", "IRT_Score", "Language_Level", "EOD" )
 
 mni <- df[, (names(df) %in% features)]
@@ -176,12 +181,12 @@ kp=attr(knn_pred,"prob")
 knnp <- ifelse(kp >=0.612, 1, 0)
 result_k <- confusionMatrix(factor(knnp), factor(test_y), mode = "prec_recall", positive="1")
 result_k <-as.matrix(result_k, what = "classes")
-#Precision            0.6732441
-#Recall               0.5507524
-#F1                   0.6058691
+#Precision            0.6797020
+#Recall               0.5991792
+#F1                   0.6369056
 # ROC area under the curve
 auc(knnp,test_y)
-#Area under the curve: 0.5564
+#Area under the curve: 0.5684
 
 #########################
 #### Random Foreset #####
@@ -196,13 +201,14 @@ print(rf_model)
 rf_pred = predict(rf_model , test_x)
 rfp <- ifelse(rf_pred >=0.612, 1, 0)
 result_rf <- confusionMatrix(factor(rfp), factor(test_y), mode = "prec_recall", positive="1")
+result_rf
 result_rf <-as.matrix(result_rf, what = "classes")
-#Precision            0.6963351
-#Recall               0.2911081
-#F1                   0.4105730
+#Precision            0.6887817
+#Recall               0.3124487
+#F1                   0.4298890
 # ROC area under the curve
 auc(rfp, test_y)
-#Area under the curve: 0.553
+#Area under the curve: 0.5496
 
 ###################
 ####### SVM #######
@@ -210,14 +216,14 @@ auc(rfp, test_y)
 svmodel <- svm(x = train_x, y = train_y)
 svm_pred <- predict(svmodel, test_x)
 svmp <- ifelse(svm_pred >=0.612, 1, 0)
-result_svm <-confusionMatrix(factor(svmp), factor(test$EOD), mode = "prec_recall", positive="1")
+result_svm <-confusionMatrix(factor(svmp), factor(test_y), mode = "prec_recall", positive="1")
 result_svm <-as.matrix(result_svm, what = "classes")
-#Precision            0.6464159
-#Recall               0.5502052
-#F1                   0.5944428
+#Precision            0.6479510
+#Recall               0.5493844
+#F1                   0.5946106
 # ROC area under the curve
 auc(svmp, test_y)
-#Area under the curve: 0.5306
+#Area under the curve: 0.5321
 
 
 #################################################################################
@@ -238,13 +244,12 @@ nb <- naiveBayes(as.factor(EOD) ~  State + Sex + Married_DP + Serving_Spouse + M
 nb_pred <- predict(nb, test, type="class")
 result_nb <-confusionMatrix(factor(nb_pred), factor(test$EOD), mode = "prec_recall", positive="1")
 result_nb <-as.matrix(result_nb, what = "classes")
-#Precision            0.63049748
-#Recall               0.95704514
-#F1                   0.76018690
-
+#Precision            0.6324895
+#Recall               0.9502052
+#F1                   0.7594577
 # ROC area under the curve
 auc(nb_pred, test$EOD)
-#Area under the curve: 0.6042
+#Area under the curve: 0.6041
 
 
 ##############################
@@ -255,12 +260,12 @@ yl = predict(mylogit, test)
 ylp <- ifelse(yl >=0.612, 1, 0)
 result_logit <- confusionMatrix(factor(ylp), factor(test$EOD), mode = "prec_recall", positive="1")
 result_logit <-as.matrix(result_logit, what = "classes")
-#Precision            0.7004545
+#Precision            0.7010919
 #Recall               0.4216142
-#F1                   0.5263877
+#F1                   0.5265676
 # ROC area under the curve
 auc(test$EOD, ylp)
-#Area under the curve: 0.5653
+#Area under the curve: 0.5658
 
 
 ########################
@@ -271,7 +276,7 @@ tree <- rpart(EOD ~ State + Sex + Married_DP + Serving_Spouse + Med_Sort + Have_
               data = train,
              method="class")
 # Plot the tree.
-fancyRpartPlot(tree)
+#fancyRpartPlot(tree)
 
 dt_pred <- as.data.frame(predict(tree, test, type = "p"))
 dtp <- ifelse(dt_pred$`1` >=0.612, 1, 0)
@@ -282,7 +287,7 @@ result_dt <-as.matrix(result_dt, what = "classes")
 #F1                   0.7321094
 # ROC area under the curve
 auc(dtp, test$EOD)
-#Area under the curve: 0.605
+#Area under the curve: 0.6059
 
 #####################################################
 ########## Machine Learning Testing ends ############
