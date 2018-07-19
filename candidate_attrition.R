@@ -2,6 +2,9 @@
 # Written by Tianchu Shu
 # Last Updated July 2018
 
+#Some of these libraries require the latest version of R
+#Make sure your R Version is at least upgraded to 3.5.0 before running the script
+
 #Candidate level data 
 library(dplyr)
 library(tidyverse)
@@ -30,7 +33,7 @@ names(df)
 df<-df[, -c(1, 11, 29, 30, 35)]
 
 #Changing col names
-colnames(df)[13] <-  "Hispanic_Latino"
+colnames(df)[13] <- "Hispanic_Latino"
 colnames(df)[15] <- "Married_DP"
 colnames(df)[16] <- "Serving_Spouse"
 colnames(df)[18] <- "Have_you_been_arres"
@@ -42,7 +45,7 @@ colnames(df)[32] <- "Inv_Acpted_Date"
 names(df) <- sub(" ", "_", names(df))
 names(df)
 
-#Extract the data of from FY2016 Q4 to FY2018 Q3
+#Extract the data of from FY2015 Q4 to FY2018 Q3
 df1 <- subset(df, FY == "FY2018" & Q != "Quarter 4")
 df2 <- subset(df, FY == "FY2015" & Q == "Quarter 4")
 df3 <- subset(df, FY == "FY2017" |FY == "FY2016")
@@ -84,7 +87,7 @@ df<-df[, -c(29)]
 #count the NA in specific column
 sum(is.na(df$EOD_Date))
 
-#Calulate the candidate attrition rate for FY16Q4 - FY18Q3
+#Calulate the candidate attrition rate for FY15Q4 - FY18Q3
 sum(is.na(df$EOD_Date))/length(df$EOD_Date)
 #0.3878271 of the candidates who got invited ended up not enter on duty
 
@@ -131,15 +134,14 @@ df$Agebin <- cut(df$Age, c(15,25,30,35,50, 81))
 summary(df$Agebin)
 
 #only keep the features we are going to use
-useful <- c("FY", "Post", "Sector", "State", "Sex", "Diversity", "Married_DP", "Serving_Spouse", "Med_Sort", "Have_you_been_arres", "Degree_Type", "Education_Level", "Age", "Agebin", "IRT", "IRT_Score", "Language_Level", "EOD" )
+useful <- c("FY","Q", "Post", "Sector", "State", "Sex", "Diversity", "Married_DP", "Serving_Spouse", "Med_Sort", "Have_you_been_arres", "Degree_Type", "Education_Level", "Age", "Agebin", "IRT", "IRT_Score", "Language_Level", "EOD" )
 df <- df[, (names(df) %in% useful)]
-
 
 #######################################################
 ########## Machine Learning Testing begins ############
 #######################################################
 head(mni)
-features <- c("FY", "Post", "Sector", "State", "Sex", "Diversity", "Married_DP", "Serving_Spouse", "Med_Sort", "Have_you_been_arres", "Education_Level",  "Age", "IRT_Score", "Language_Level", "EOD" )
+features <- c("FY", "Q", "Post", "Sector", "State", "Sex", "Diversity", "Married_DP", "Serving_Spouse", "Med_Sort", "Have_you_been_arres", "Education_Level",  "Age", "IRT_Score", "Language_Level", "EOD" )
 
 mni <- df[, (names(df) %in% features)]
 mni <-as.data.frame(mni)
@@ -155,12 +157,12 @@ mydata <- mydata[, !(names(mydata) %in% dcol)]
 names(mydata)
 
 #Train/Test split, using 2015-2017 to predict 2018
-dtrain <- mydata[mydata$FY != "FY2018",]
-dtest <- mydata[mydata$FY == "FY2018",]
+dtest <- subset(mydata, FY == "FY2018" | FY == "FY2017" & Q == "Quarter 4")
+dtrain <- mydata[!rownames(mydata) %in% rownames(dtest),]
 
-#Drop the FY column
-dtrain <- dtrain[, -c(1)]
-dtest <- dtest[, -c(1)]
+#Drop the FY Q column
+dtrain <- dtrain[, -c(1, 2)]
+dtest <- dtest[, -c(1,2)]
 
 #rf_model = randomForest(target~. , data = train, ntree =500, importance = TRUE)
 train_x = dtrain[, names(dtrain) !='EOD']
@@ -171,16 +173,15 @@ test_y = dtest[, names(dtest) == 'EOD']
 #### K-Nearest Neighbor #####
 knn_pred <- knn(train = train_x, test = test_x,cl = train_y, k=20, prob=TRUE)
 kp=attr(knn_pred,"prob") 
-knnp <- ifelse(kp >=0.625, 1, 0)
+knnp <- ifelse(kp >=0.612, 1, 0)
 result_k <- confusionMatrix(factor(knnp), factor(test_y), mode = "prec_recall", positive="1")
 result_k <-as.matrix(result_k, what = "classes")
-#Precision            0.6598480
-#Recall               0.5053715
-#F1                   0.5723701
-
+#Precision            0.6732441
+#Recall               0.5507524
+#F1                   0.6058691
 # ROC area under the curve
 auc(test_y, kp)
-#Area under the curve: 0.5723
+#Area under the curve: 0.5798
 
 #########################
 #### Random Foreset #####
@@ -188,77 +189,77 @@ auc(test_y, kp)
 rf_model = randomForest(x = train_x, y = train_y , ntree = 100, importance = TRUE)
 #these are all the different things you can call from the model.
 #view results
-#print(rf_model)
+print(rf_model)
 #importance of each predictor
-varImpPlot(rf_model)
+#varImpPlot(rf_model)
 
 rf_pred = predict(rf_model , test_x)
-rfp <- ifelse(rf_pred >=0.625, 1, 0)
+rfp <- ifelse(rf_pred >=0.612, 1, 0)
 result_rf <- confusionMatrix(factor(rfp), factor(test_y), mode = "prec_recall", positive="1")
 result_rf <-as.matrix(result_rf, what = "classes")
-#Precision            0.65981735
-#Recall               0.12936437
-#F1                   0.21631737
+#Precision            0.6963351
+#Recall               0.2911081
+#F1                   0.4105730
 
 # ROC area under the curve
 auc(test_y, rf_pred)
-#Area under the curve: 0.5048
+#Area under the curve: 0.5561
 
-#Train/Test split, using 2016, 2017 to predict 2018
-train <- df[df$FY != "FY2018",]
-test <- df[df$FY == "FY2018",]
+#Train/Test split, using 2015, 2016, 2017 to predict 2018
+test <- subset(df, FY == "FY2018" | FY == "FY2017" & Q == "Quarter 4")
+train <- df[!rownames(mydata) %in% rownames(dtest),]
+
 head(test)
-#Drop the FY column
-train <- train[, -c(1)]
-test <- test[, -c(1)]
+#Drop the FY, Q columns
+train <- train[, -c(1,2)]
+test <- test[, -c(1,2)]
 
 ######################
 #### Naive Bayes #####
 ######################
 #Tried adding post and sector, didnt have no differences
-nb <- naiveBayes(as.factor(EOD) ~  State + Sex + Married_DP + Serving_Spouse + Med_Sort + Have_you_been_arres+ Degree_Type + Language_Level + Agebin + IRT_Score, data=train, laplace = 1, threshold=0.625, eps =1, subset, na.action = na.pass)
+nb <- naiveBayes(as.factor(EOD) ~  State + Sex + Married_DP + Serving_Spouse + Med_Sort + Have_you_been_arres+ Degree_Type + Language_Level + Agebin + IRT_Score, data=train, laplace = 1, threshold=0.612, eps =1, subset, na.action = na.pass)
 nb_pred <- predict(nb, test, type="class")
 result_nb <-confusionMatrix(factor(nb_pred), factor(test$EOD), mode = "prec_recall", positive="1")
 result_nb <-as.matrix(result_nb, what = "classes")
-#Precision            0.61624569
-#Recall               0.96105640
-#F1                   0.75096187
+#Precision            0.63049748
+#Recall               0.95704514
+#F1                   0.76018690
 
 # ROC area under the curve
 auc(nb_pred, test$EOD)
-#Area under the curve: 0.6067
-
+#Area under the curve: 0.6042
 
 ###################
 ####### SVM #######
 ###################
 svmodel <- svm(EOD ~ Sector+State + Sex + Married_DP + Serving_Spouse + Med_Sort + Have_you_been_arres+ Degree_Type + Language_Level + Age + IRT_Score, data=train)
 svm_pred <- predict(svmodel, test)
-svmp <- ifelse(svm_pred >=0.625, 1, 0)
+svmp <- ifelse(svm_pred >=0.612, 1, 0)
 result_svm <-confusionMatrix(factor(svmp), factor(test$EOD), mode = "prec_recall", positive="1")
 result_svm <-as.matrix(result_svm, what = "classes")
-#Precision : 0.6164          
-#Recall : 0.1755          
-#F1 : 0.2732
+#Precision            0.6164
+#Recall               0.1755
+#F1                   0.2732
 
 # ROC area under the curve
 auc(test$EOD, svm_pred)
 #Area under the curve: 1
-
 
 ##############################
 #### Logistic Regression #####
 ##############################
 mylogit <- lm(EOD ~ Sector+State + Sex + Married_DP + Serving_Spouse + Med_Sort + Have_you_been_arres+ Degree_Type + Language_Level + Age + IRT_Score, data=train)
 yl = predict(mylogit, test)
-result_logit <- confusionMatrix(factor(round(yl)), factor(test$EOD), mode = "prec_recall", positive="1")
+ylp <- ifelse(yl >=0.612, 1, 0)
+result_logit <- confusionMatrix(factor(ylp), factor(test$EOD), mode = "prec_recall", positive="1")
 result_logit <-as.matrix(result_logit, what = "classes")
-#Precision            0.6548307
-#Recall               0.3549687
-#F1                   0.4603774
+#Precision            0.7004545
+#Recall               0.4216142
+#F1                   0.5263877
 # ROC area under the curve
-auc(test$EOD, yl)
-#0.5836
+auc(test$EOD, ylp)
+#0.5653
 
 
 ########################
@@ -271,19 +272,20 @@ tree <- rpart(EOD ~ State + Sex + Married_DP + Serving_Spouse + Med_Sort + Have_
 # Plot the tree.
 fancyRpartPlot(tree)
 
-dt_pred <- predict(tree, test, type = "class")
-result_dt <- confusionMatrix(factor(dt_pred), factor(test$EOD), mode = "prec_recall", positive="1")
+dt_pred <- as.data.frame(predict(tree, test, type = "p"))
+dtp <- ifelse(dt_pred$`1` >=0.612, 1, 0)
+result_dt <- confusionMatrix(factor(dtp), factor(test$EOD), mode = "prec_recall", positive="1")
 result_dt <-as.matrix(result_dt, what = "classes")
-#Precision            0.65065502
-#Recall               0.13339302
-#F1                   0.22139673
+#Precision            0.6734835
+#Recall               0.8019152
+#F1                   0.7321094
 # ROC area under the curve
-auc(dt_pred, test$EOD)
-#0.5267
+auc(dtp, test$EOD)
+#0.6059
 
 #####################################################
 ########## Machine Learning Testing ends ############
 #####################################################
-
 ml_result <- cbind(result_k, result_nb, result_logit, result_rf, result_dt)
+colnames(ml_result) <- c("knn", "naive_bayes", "logit", "random_forest", "decision_tree")
 write.csv(ml_result, file = "ml_result.csv")
