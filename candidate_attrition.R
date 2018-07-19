@@ -240,16 +240,16 @@ test <- test[, -c(1,2)]
 #### Naive Bayes #####
 ######################
 #Tried adding post and sector, didnt have no differences
-nb <- naiveBayes(as.factor(EOD) ~  State + Sex + Married_DP + Serving_Spouse + Med_Sort + Have_you_been_arres+ Degree_Type + Language_Level + Agebin + IRT_Score, data=train, laplace = 1, threshold=0.612, eps =1, subset, na.action = na.pass)
+nb <- naiveBayes(as.factor(EOD) ~  State + Sex + Married_DP + Serving_Spouse + Med_Sort + Have_you_been_arres+ Degree_Type + Language_Level + Agebin + IRT, data=train, laplace = 1, threshold=0.612, eps =1, subset, na.action = na.pass)
 nb_pred <- predict(nb, test, type="class")
 result_nb <-confusionMatrix(factor(nb_pred), factor(test$EOD), mode = "prec_recall", positive="1")
 result_nb <-as.matrix(result_nb, what = "classes")
-#Precision            0.6324895
-#Recall               0.9502052
-#F1                   0.7594577
+#Precision            0.63122864
+#Recall               0.96005472
+#F1                   0.76166703
 # ROC area under the curve
 auc(nb_pred, test$EOD)
-#Area under the curve: 0.6041
+#Area under the curve: 0.6134
 
 
 ##############################
@@ -293,5 +293,14 @@ auc(dtp, test$EOD)
 ########## Machine Learning Testing ends ############
 #####################################################
 ml_result <- cbind(result_k, result_svm, result_nb, result_logit, result_rf, result_dt)
-colnames(ml_result) <- c("knn", "svm", "naive_bayes", "logit", "random_forest", "decision_tree")
+colnames(ml_result) <- c("KNN", "SVM", "Naive_Bayes", "Logit", "Random_forest", "Decision_tree")
 write.csv(ml_result, file = "ml_result.csv")
+
+
+
+mni %>% 
+      select(Agebin, IRT, Diversity, Sex, Med_Sort, Degree_Type, Language_Level) %>% 
+      gather(metric, value) %>% 
+      ggplot(aes(value, fill = metric)) + 
+      geom_density(show.legend = FALSE) + 
+      facet_wrap(~ metric, scales = "free")
