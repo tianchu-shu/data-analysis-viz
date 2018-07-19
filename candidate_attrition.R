@@ -260,7 +260,7 @@ result_logit <-as.matrix(result_logit, what = "classes")
 #F1                   0.5263877
 # ROC area under the curve
 auc(test$EOD, ylp)
-#0.5653
+#Area under the curve: 0.5653
 
 
 ########################
@@ -282,7 +282,7 @@ result_dt <-as.matrix(result_dt, what = "classes")
 #F1                   0.7321094
 # ROC area under the curve
 auc(dtp, test$EOD)
-#0.6059
+#Area under the curve: 0.605
 
 #####################################################
 ########## Machine Learning Testing ends ############
