@@ -180,8 +180,8 @@ result_k <-as.matrix(result_k, what = "classes")
 #Recall               0.5507524
 #F1                   0.6058691
 # ROC area under the curve
-auc(test_y, kp)
-#Area under the curve: 0.5798
+auc(knnp,test_y)
+#Area under the curve: 0.5564
 
 #########################
 #### Random Foreset #####
@@ -200,11 +200,27 @@ result_rf <-as.matrix(result_rf, what = "classes")
 #Precision            0.6963351
 #Recall               0.2911081
 #F1                   0.4105730
-
 # ROC area under the curve
-auc(test_y, rf_pred)
-#Area under the curve: 0.5561
+auc(rfp, test_y)
+#Area under the curve: 0.553
 
+###################
+####### SVM #######
+###################
+svmodel <- svm(x = train_x, y = train_y)
+svm_pred <- predict(svmodel, test_x)
+svmp <- ifelse(svm_pred >=0.612, 1, 0)
+result_svm <-confusionMatrix(factor(svmp), factor(test$EOD), mode = "prec_recall", positive="1")
+result_svm <-as.matrix(result_svm, what = "classes")
+#Precision            0.6464159
+#Recall               0.5502052
+#F1                   0.5944428
+# ROC area under the curve
+auc(svmp, test_y)
+#Area under the curve: 0.5306
+
+
+#################################################################################
 #Train/Test split, using 2015, 2016, 2017 to predict 2018
 test <- subset(df, FY == "FY2018" | FY == "FY2017" & Q == "Quarter 4")
 train <- df[!rownames(mydata) %in% rownames(dtest),]
@@ -230,21 +246,6 @@ result_nb <-as.matrix(result_nb, what = "classes")
 auc(nb_pred, test$EOD)
 #Area under the curve: 0.6042
 
-###################
-####### SVM #######
-###################
-svmodel <- svm(EOD ~ Sector+State + Sex + Married_DP + Serving_Spouse + Med_Sort + Have_you_been_arres+ Degree_Type + Language_Level + Age + IRT_Score, data=train)
-svm_pred <- predict(svmodel, test)
-svmp <- ifelse(svm_pred >=0.612, 1, 0)
-result_svm <-confusionMatrix(factor(svmp), factor(test$EOD), mode = "prec_recall", positive="1")
-result_svm <-as.matrix(result_svm, what = "classes")
-#Precision            0.6164
-#Recall               0.1755
-#F1                   0.2732
-
-# ROC area under the curve
-auc(test$EOD, svm_pred)
-#Area under the curve: 1
 
 ##############################
 #### Logistic Regression #####
@@ -286,6 +287,6 @@ auc(dtp, test$EOD)
 #####################################################
 ########## Machine Learning Testing ends ############
 #####################################################
-ml_result <- cbind(result_k, result_nb, result_logit, result_rf, result_dt)
-colnames(ml_result) <- c("knn", "naive_bayes", "logit", "random_forest", "decision_tree")
+ml_result <- cbind(result_k, result_svm, result_nb, result_logit, result_rf, result_dt)
+colnames(ml_result) <- c("knn", "svm", "naive_bayes", "logit", "random_forest", "decision_tree")
 write.csv(ml_result, file = "ml_result.csv")
