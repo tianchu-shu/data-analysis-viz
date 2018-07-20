@@ -1,5 +1,5 @@
-# OAE Data Mining Project
-# Written by Tianchu Shu
+#OAE Data Mining Project
+#Written by Tianchu Shu
 #Last Updated July 2018
 
 #Some of these libraries require the latest version of R
@@ -146,12 +146,12 @@ df <- df[, (names(df) %in% useful)]
 ########## Machine Learning Testing begins ############
 #######################################################
 head(df)
-features <- c("FY", "Q", "Post", "Sector", "State", "Sex", "Diversity", "Married_DP", "Serving_Spouse", "Med_Sort", "Have_you_been_arres", "Education_Level",  "Age", "IRT_Score", "Language_Level", "EOD" )
+features <- c("FY", "Q",  "State", "Sex", "Diversity", "Married_DP", "Serving_Spouse", "Med_Sort", "Have_you_been_arres", "Education_Level",  "Agebin", "IRT_Score", "Language_Level", "EOD" )
 
 mni <- df[, (names(df) %in% features)]
 mni <-as.data.frame(mni)
 #Select the columns for dummify
-dcol <- c("Post", "Sector", "State", "Sex", "Diversity", "Married_DP", "Serving_Spouse", "Language_Level",  "Med_Sort", "Have_you_been_arres", "Education_Level")
+dcol <- c("Agebin", "State", "Sex", "Diversity", "Married_DP", "Serving_Spouse", "Language_Level",  "Med_Sort", "Have_you_been_arres", "Education_Level")
 
 #Create dummy vars
 #df1 <- cbind(mni, dummy(df$Q, sep = "_"))
@@ -168,62 +168,79 @@ dtrain <- mydata[!rownames(mydata) %in% rownames(dtest),]
 #Drop the FY Q column
 dtrain <- dtrain[, -c(1, 2)]
 dtest <- dtest[, -c(1,2)]
-
-#rf_model = randomForest(target~. , data = train, ntree =500, importance = TRUE)
 train_x = dtrain[, names(dtrain) !='EOD']
 train_y = dtrain[, names(dtrain) == 'EOD']
 test_x = dtest[, names(dtest) != 'EOD']
 test_y = dtest[, names(dtest) == 'EOD']
 
+sum(dtrain$EOD)/length(dtrain$EOD)
+# 0.6095197 of the candidates in the trainset EOD
+
+#WARNING: SVM, Random forest and KNN will take longer time than other models to run
+
 #### K-Nearest Neighbor #####
-knn_pred <- knn(train = train_x, test = test_x,cl = train_y, k=20, prob=TRUE)
-kp=attr(knn_pred,"prob") 
-knnp <- ifelse(kp >=0.612, 1, 0)
+start_time <- Sys.time()
+knn_pred <- knn(train = train_x, test = test_x,cl = train_y, k=10, prob=TRUE)
+kp=attr(knn_pred, "prob") 
+end_time <- Sys.time()
+#Knn running time: 25.53955 secs
+end_time - start_time
+
+knnp <- ifelse(kp >=0.61, 1, 0)
 result_k <- confusionMatrix(factor(knnp), factor(test_y), mode = "prec_recall", positive="1")
+result_k
 result_k <-as.matrix(result_k, what = "classes")
-#Precision            0.6797020
-#Recall               0.5991792
-#F1                   0.6369056
+#Precision : 0.6553          
+#Recall :    0.6137          
+#F1 :        0.6338
 # ROC area under the curve
 auc(knnp,test_y)
-#Area under the curve: 0.5684
+#Area under the curve: 0.5449
 
 #########################
 #### Random Foreset #####
 ##########################
+start_time <- Sys.time()
 rf_model = randomForest(x = train_x, y = train_y , ntree = 100, importance = TRUE)
-#these are all the different things you can call from the model.
+rf_pred = predict(rf_model , test_x)
+end_time <- Sys.time()
+#Random Forest running time:  2.748325 mins
+end_time - start_time
+
 #view results
 print(rf_model)
 #importance of each predictor
 #varImpPlot(rf_model)
 
-rf_pred = predict(rf_model , test_x)
-rfp <- ifelse(rf_pred >=0.612, 1, 0)
+rfp <- ifelse(rf_pred >=0.61, 1, 0)
 result_rf <- confusionMatrix(factor(rfp), factor(test_y), mode = "prec_recall", positive="1")
 result_rf
 result_rf <-as.matrix(result_rf, what = "classes")
-#Precision            0.6887817
-#Recall               0.3124487
-#F1                   0.4298890
+#Precision : 0.6980          
+#Recall :    0.4181          
+#F1 :        0.5229
 # ROC area under the curve
 auc(rfp, test_y)
-#Area under the curve: 0.5496
+#Area under the curve: 0.564
 
 ###################
 ####### SVM #######
 ###################
+start_time <- Sys.time()
 svmodel <- svm(x = train_x, y = train_y)
 svm_pred <- predict(svmodel, test_x)
-svmp <- ifelse(svm_pred >=0.612, 1, 0)
+end_time <- Sys.time()
+#SVM running time: 2.980131 mins
+end_time - start_time
+svmp <- ifelse(svm_pred >=0.61, 1, 0)
 result_svm <-confusionMatrix(factor(svmp), factor(test_y), mode = "prec_recall", positive="1")
 result_svm <-as.matrix(result_svm, what = "classes")
-#Precision            0.6479510
-#Recall               0.5493844
-#F1                   0.5946106
+#Precision : 0.6530         
+#Recall :    0.6698         
+#F1 :        0.6613
 # ROC area under the curve
 auc(svmp, test_y)
-#Area under the curve: 0.5321
+#Area under the curve: 0.5485
 
 
 #################################################################################
@@ -240,52 +257,68 @@ test <- test[, -c(1,2)]
 #### Naive Bayes #####
 ######################
 #Tried adding post and sector, didnt have no differences
-nb <- naiveBayes(as.factor(EOD) ~  State + Sex + Married_DP + Serving_Spouse + Med_Sort + Have_you_been_arres+ Degree_Type + Language_Level + Agebin + IRT, data=train, laplace = 1, threshold=0.612, eps =1, subset, na.action = na.pass)
+start_time <- Sys.time()
+nb <- naiveBayes(as.factor(EOD) ~  State + Sex + Married_DP + Serving_Spouse + Med_Sort + Have_you_been_arres+ Degree_Type + Language_Level + Agebin + IRT, data=train, laplace = 1, threshold=0.61, eps =1, subset, na.action = na.pass)
 nb_pred <- predict(nb, test, type="class")
+end_time <- Sys.time()
+#Naive Bayes running time:  2.374238 secs
+end_time - start_time
 result_nb <-confusionMatrix(factor(nb_pred), factor(test$EOD), mode = "prec_recall", positive="1")
+result_nb
 result_nb <-as.matrix(result_nb, what = "classes")
-#Precision            0.63122864
-#Recall               0.96005472
-#F1                   0.76166703
+#Precision : 0.6312          
+#Recall :    0.9601          
+#F1 :        0.7617
 # ROC area under the curve
 auc(nb_pred, test$EOD)
 #Area under the curve: 0.6134
 
-
 ##############################
 #### Logistic Regression #####
 ##############################
-mylogit <- lm(EOD ~ Sector+State + Sex + Married_DP + Serving_Spouse + Med_Sort + Have_you_been_arres+ Degree_Type + Language_Level + Age + IRT_Score, data=train)
+start_time <- Sys.time()
+mylogit <- lm(EOD ~ Sector + State + Sex + Married_DP + Serving_Spouse + Med_Sort + Have_you_been_arres+ Degree_Type + Language_Level + Age + IRT_Score, data=train)
 yl = predict(mylogit, test)
-ylp <- ifelse(yl >=0.612, 1, 0)
+end_time <- Sys.time()
+#Logistic Regression running time: 0.2440238 secs
+end_time - start_time
+ylp <- ifelse(yl >=0.61, 1, 0)
 result_logit <- confusionMatrix(factor(ylp), factor(test$EOD), mode = "prec_recall", positive="1")
 result_logit <-as.matrix(result_logit, what = "classes")
-#Precision            0.7010919
-#Recall               0.4216142
-#F1                   0.5265676
+result_logit
+#Precision : 0.7009          
+#Recall :    0.4252          
+#F1 :        0.5293
+
 # ROC area under the curve
 auc(test$EOD, ylp)
-#Area under the curve: 0.5658
+#Area under the curve: 0.5662
 
 
 ########################
 #### Decision Tree #####
 ########################
-# Create the tree.
+# Create the tree
+start_time <- Sys.time()
 tree <- rpart(EOD ~ State + Sex + Married_DP + Serving_Spouse + Med_Sort + Have_you_been_arres+ Degree_Type + Language_Level + Age + IRT_Score,
               data = train,
              method="class")
-# Plot the tree.
-#fancyRpartPlot(tree)
+#Plot the tree.
+rpart.plot(tree)
 
 dt_pred <- as.data.frame(predict(tree, test, type = "p"))
-dtp <- ifelse(dt_pred$`1` >=0.612, 1, 0)
+end_time <- Sys.time()
+#Decision Tree running time: 0.854085 secs
+end_time - start_time
+dtp <- ifelse(dt_pred$`1` >=0.61, 1, 0)
 result_dt <- confusionMatrix(factor(dtp), factor(test$EOD), mode = "prec_recall", positive="1")
+result_dt
 result_dt <-as.matrix(result_dt, what = "classes")
-#Precision            0.6734835
-#Recall               0.8019152
-#F1                   0.7321094
-# ROC area under the curve
+#Precision : 0.6735          
+#Recall :    0.8019          
+#F1 :        0.7321
+
+#ROC area under the curve
 auc(dtp, test$EOD)
 #Area under the curve: 0.6059
 
@@ -294,7 +327,7 @@ auc(dtp, test$EOD)
 #####################################################
 ml_result <- cbind(result_k, result_svm, result_nb, result_logit, result_rf, result_dt)
 colnames(ml_result) <- c("KNN", "SVM", "Naive_Bayes", "Logit", "Random_forest", "Decision_tree")
-write.csv(ml_result, file = "ml_result.csv")
+write.csv(ml_result, file = "result.csv")
 
 
 
