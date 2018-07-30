@@ -72,7 +72,8 @@ df$`Serving_Spouse` <- df$`Serving_Spouse` %>% replace_na("No")
 df$`Language_Level` <- df$`Language_Level` %>% replace_na("None")
 df$Med_Sort <- df$Med_Sort %>% replace_na("Nomination Cleared")
 #Using the mode 22 to fill the NA for IRT_Score
-df$IRT_Score <- df$IRT_Score %>% replace_na(22)
+df <- df %>% drop_na(IRT_Score)
+#df$IRT_Score <- df$IRT_Score %>% replace_na(22)
 
 #Convert the date col to correct type
 df$DOB <- as.Date(df$DOB, "%m/%d/%Y")
@@ -127,7 +128,7 @@ df[df$Med_Sort == 'Nomination Clear',]$Med_Sort ="Nomination Cleared"
 df[df$Med_Sort=="Triage"| df$Med_Sort=="Nomination Medical Pending",]$Med_Sort = "Medical Pending"
 df[df$Med_Sort=="No additional validation required, cleared for all countries"| df$Med_Sort=="No additional validation required, support required",]$Med_Sort = "Nomination Cleared"
 df[df$Med_Sort=="Additional validation required, support required"| df$Med_Sort=="null",]$Med_Sort = "Nomination Validation Required"
-
+df[df$Med_Sort == "Medical pending",]$Med_Sort = "Medical Pending"
 #Merge "Yes" & "Yes_DP"
 df[df$`Serving_Spouse`=="Yes_DP", ]$`Serving_Spouse` = "Yes"
 
