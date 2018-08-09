@@ -25,19 +25,6 @@ lookup <- read_excel("C:/Users/tshu/Downloads/VOL ID CRN look up table.xlsx")
 lookup2 <- read_excel("C:/Users/tshu/Downloads/VOL ID CRN look up table FY 13-14.xlsx")
 df <- read_csv("C:/Users/tshu/Downloads/Candidate Attrition _05Jul_1401.CSV")
 
-ET$ETR <- ifelse(ET$"Assignment Status" =="ET-Resignation", 1,0)
-sum(ET$ETR)/length(ET$ETR)
-#0.201714 is the ET-Resignation percentage of the ET Data since FY15
-
-key <- rbind(lookup, lookup2)
-key <- key[, -c(1, 2, 3)]
-m <- merge(et, key, by.x = "Vol Id", by.y = "Volunteer ID")
-et <- merge(m, df, by.x = "Candidate ID", by.y = "CRN", all.x = TRUE)
-et <- merge(m, df, by.x = "Candidate ID", by.y = "CRN")
-
-ET$Post.x <- str_extract(ET$Post.x, "[A-Z]+")
-ET$Post.y <- toupper(ET$Post.y)
-
 ###########################################
 ########## Data Pre-processing ############
 ###########################################
@@ -166,19 +153,74 @@ useful <- c("FY","Q", "CRN", "Post", "Sector", "State", "Sex", "Diversity", "Mar
 df <- df[, (names(df) %in% useful)]
 df <- unique(df)
 
+ET$ETR <- ifelse(ET$"Assignment Status" =="ET-Resignation", 1,0)
+sum(ET$ETR)/length(ET$ETR)
+#0.201714 is the ET-Resignation percentage of the ET Data since FY15
+
+as <- subset(et, `Resignation Reason Primary`=="Resig in lieu of Admin Sep" | `Assignment Status`=="ET-Administrative Separation")
+#220 are ET because of Admin Sep
+key <- rbind(lookup, lookup2)
+key <- key[, -c(1, 2, 3)]
+m <- merge(ET, key, by.x = "Vol Id", by.y = "Volunteer ID")
+et <- merge(m, df, by.x = "Candidate ID", by.y = "CRN", all.x = TRUE)
+et <- merge(m, df, by.x = "Candidate ID", by.y = "CRN")
+
+ET$Post.x <- str_extract(ET$Post.x, "[A-Z]+")
+ET$Post.y <- toupper(ET$Post.y)
 
 #drop the duplicates
 et <- et[!rev(duplicated(rev(et$"Vol Id"))),]
+
+#Data-viz for ET-resignation
+library(ggplot2)
+library(ggvis)
+library(tidyverse)
+library(reshape2)
+
+ggplot(as, aes(Age, IRT_Score)) +
+  geom_point(aes(color = FY)) +
+  geom_smooth(se = FALSE) +
+  labs(title = "")
+
+
+ggplot(data = melt(as), mapping = aes(x = value)) + 
+  geom_histogram(bins = 30) + facet_wrap(~variable, scales = 'free_x')
+
+
+ggplot(data = as) + geom_point(mapping = aes(x=Diversity, y=Degree_Type, color=Age))
+
+ggplot(data = as) + 
+  + geom_bar(mapping = aes(x = Diversity, fill = Degree_Type), 
+             position="dodge")
+
+##
+bar <- ggplot(data = as) + 
+  geom_bar(mapping = aes(x = Agebin, fill = Diversity), 
+           show.legend = FALSE,
+           width = 1)  
+theme(aspect.ratio = 1) + labs(x = NULL, y = NULL)
+
+bar + coord_flip()
+bar + coord_polar()
+
+##
+ggplot(as, aes(Agebin, Diversity)) +
+  geom_point(aes(colour = Degree_Type))
+
+
+as %>% ggvis(~EOD, ~Sector, fill = ~Agebin) %>% layer_points()
+as %>% ggvis(~fill_rate, ~freq, fill = ~Sector) %>% layer_points()
+
 #######################################################
 ########## Machine Learning Testing begins ############
 #######################################################
-head(df)
-features <- c("FY", "Q", "State", "Sex", "Diversity", "Married_DP", "Serving_Spouse", "Med_Sort", "Have_you_been_arres", "Education_Level",  "Agebin", "IRT_Score", "Language_Level", "EOD" )
+head(et)
+features <- c("FY", "Q", "Sector", "Sex", "Post.y", "Diversity",  "Have_you_been_arres", "Education_Level",  "Agebin", "ETR" )
 
-mni <- df[, (names(df) %in% features)]
+mni <- et[, (names(et) %in% features)]
 mni <-as.data.frame(mni)
 #Select the columns for dummify
-dcol <- c("Agebin", "State", "Sex", "Diversity", "Married_DP", "Serving_Spouse", "Language_Level",  "Med_Sort", "Have_you_been_arres", "Education_Level")
+dcol <- c("Agebin", "Sector", "Sex", "Post.y","Diversity", "Married_DP", "Serving_Spouse", "Language_Level",  "Med_Sort", "Have_you_been_arres", "Education_Level")
 
 #Create dummy vars
 #df1 <- cbind(mni, dummy(df$Q, sep = "_"))
@@ -188,20 +230,21 @@ mydata <- dummy.data.frame(mni, names=dcol, sep="_",  drop = TRUE)
 mydata <- mydata[, !(names(mydata) %in% dcol)]
 names(mydata)
 
-#Train/Test split, using 2015-2017 to predict 2018
-dtest <- subset(mydata, FY == "FY2018" | FY == "FY2017" & Q == "Quarter 4")
+#Train/Test split, using 2013-2015 to predict 2016
+dtest <- subset(mydata, FY == "FY2016" | FY == "FY2015" & Q == "Quarter 4")
 dtrain <- mydata[!rownames(mydata) %in% rownames(dtest),]
 
 #Drop the FY Q column
-dtrain <- dtrain[, -c(1, 2)]
-dtest <- dtest[, -c(1,2)]
-train_x = dtrain[, names(dtrain) !='EOD']
-train_y = dtrain[, names(dtrain) == 'EOD']
-test_x = dtest[, names(dtest) != 'EOD']
-test_y = dtest[, names(dtest) == 'EOD']
+dtrain <- dtrain[, -c(2, 3)]
+dtest <- dtest[, -c(2,3)]
+train_x = dtrain[, names(dtrain) !='ETR']
+train_y = dtrain[, names(dtrain) == 'ETR']
+test_x = dtest[, names(dtest) != 'ETR']
+test_y = dtest[, names(dtest) == 'ETR']
 
-sum(dtrain$EOD)/length(dtrain$EOD)
-# 0.6095197 of the candidates in the trainset EOD
+sum(dtrain$ETR)/length(dtrain$ETR)
+# 0.1070144 of the candidates in the trainset ET-resignation
+# 0.1360176 for the whole et dataset
 
 #WARNING: SVM, Random forest and KNN will take longer time than other models to run
 
@@ -210,19 +253,19 @@ start_time <- Sys.time()
 knn_pred <- knn(train = train_x, test = test_x,cl = train_y, k=10, prob=TRUE)
 kp=attr(knn_pred, "prob") 
 end_time <- Sys.time()
-#Knn running time: 25.342 secs
+#Knn running time: 3.776 secs
 end_time - start_time
 
-knnp <- ifelse(kp >=0.61, 1, 0)
+knnp <- ifelse(kp >=0.85, 1, 0)
 result_k <- confusionMatrix(factor(knnp), factor(test_y), mode = "prec_recall", positive="1")
 result_k
 result_k <-as.matrix(result_k, what = "classes")
-#Precision : 0.6553          
-#Recall :    0.6137          
-#F1 :        0.6338
+#Precision : 0.1821          
+#Recall :    0.7969          
+#F1 :        0.2965
 # ROC area under the curve
 auc(knnp,test_y)
-#Area under the curve: 0.5449
+#Area under the curve: 0.4761
 
 #########################
 #### Random Foreset #####
@@ -239,16 +282,16 @@ print(rf_model)
 #importance of each predictor
 #varImpPlot(rf_model)
 
-rfp <- ifelse(rf_pred >=0.61, 1, 0)
+rfp <- ifelse(rf_pred <=0.1, 0, 1)
 result_rf <- confusionMatrix(factor(rfp), factor(test_y), mode = "prec_recall", positive="1")
 result_rf
 result_rf <-as.matrix(result_rf, what = "classes")
-#Precision : 0.6935          
-#Recall :    0.4167          
-#F1 :        0.5206
+#Precision : 0.2033          
+#Recall :    0.3532          
+#F1 :        0.2580
 # ROC area under the curve
 auc(rfp, test_y)
-#Area under the curve: 0.5605
+#Area under the curve: 0.5098
 
 ###################
 ####### SVM #######
@@ -259,67 +302,69 @@ svm_pred <- predict(svmodel, test_x)
 end_time <- Sys.time()
 #SVM running time: 2.987182 mins
 end_time - start_time
-svmp <- ifelse(svm_pred >=0.61, 1, 0)
+
+svmp <- ifelse(svm_pred <=0.1, 0, 1)
 result_svm <-confusionMatrix(factor(svmp), factor(test_y), mode = "prec_recall", positive="1")
 result_svm <-as.matrix(result_svm, what = "classes")
-#Precision : 0.6530        
-#Recall :    0.6698         
-#F1 :        0.6613
+#Precision : 0.1902        
+#Recall :    0.3620         
+#F1 :        0.2494
 # ROC area under the curve
 auc(svmp, test_y)
-#Area under the curve: 0.5485
+#Area under the curve: 0.5001
 
 
 #################################################################################
-#Train/Test split, using 2015, 2016, 2017 to predict 2018
-test <- subset(df, FY == "FY2018" | FY == "FY2017" & Q == "Quarter 4")
-train <- df[!rownames(mydata) %in% rownames(dtest),]
+#Train/Test split, using 2013, 2014, 2015 to predict 2016
+test <- subset(mni, FY == "FY2016" | FY == "FY2015" & Q == "Quarter 4")
+train <- mni[!rownames(mni) %in% rownames(dtest),]
 
 head(test)
 #Drop the FY, Q columns
-train <- train[, -c(1,2)]
-test <- test[, -c(1,2)]
+train <- train[, -c(3,2)]
+test <- test[, -c(3,2)]
 
 ######################
 #### Naive Bayes #####
 ######################
 #Tried adding post and sector, didnt have no differences
 start_time <- Sys.time()
-nb <- naiveBayes(as.factor(EOD) ~  Agebin + IRT, data=train, laplace = 1, threshold=0.61, eps =1, subset, na.action = na.pass)
+nb <- naiveBayes(as.factor(ETR) ~ Post.y + Sector + Sex + Have_you_been_arres + Education_Level + Diversity + Agebin, data=train, laplace = 1, threshold=0.5, eps =1, subset, na.action = na.pass)
 nb_pred <- predict(nb, test, type="class")
 end_time <- Sys.time()
-#Naive Bayes running time:  1.334 secs
+#Naive Bayes running time:  0.829 secs
 end_time - start_time
-result_nb <-confusionMatrix(factor(nb_pred), factor(test$EOD), mode = "prec_recall", positive="1")
+result_nb <-confusionMatrix(factor(nb_pred), factor(test$ETR), mode = "prec_recall", positive="1")
 result_nb
 result_nb <-as.matrix(result_nb, what = "classes")
-#Precision : 0.6312          
-#Recall :    0.9601          
-#F1 :        0.7617
+#Precision : 0.2812         
+#Recall :    0.040          
+#F1 :        0.070
 # ROC area under the curve
-auc(nb_pred, test$EOD)
-#Area under the curve: 0.6134
+auc(nb_pred, test$ETR)
+#Area under the curve: 0.5468
 
 ##############################
 #### Logistic Regression #####
 ##############################
+test1<-test[test$Post.y != "OLD FIELD Micronesia" & test$Post.y != "Timor-Leste" & test$Post.y != "The Peoples Republic of China",]
 start_time <- Sys.time()
-mylogit <- lm(EOD ~ Sector + State + Sex + Married_DP + Serving_Spouse + Med_Sort + Have_you_been_arres+ Degree_Type + Language_Level + Age + IRT_Score, data=train)
-yl = predict(mylogit, test)
+mylogit <- lm(ETR ~ Post.y + Sector + Sex + Have_you_been_arres + Education_Level + Diversity + Agebin, data=train)
+yl = predict(mylogit, test1)
 end_time <- Sys.time()
 #Logistic Regression running time: 0.2440238 secs
 end_time - start_time
-ylp <- ifelse(yl >=0.61, 1, 0)
-result_logit <- confusionMatrix(factor(ylp), factor(test$EOD), mode = "prec_recall", positive="1")
+ylp <- ifelse(yl >=0.13, 1, 0)
+result_logit <- confusionMatrix(factor(ylp), factor(test1$ETR), mode = "prec_recall", positive="1")
 result_logit <-as.matrix(result_logit, what = "classes")
 result_logit
-#Precision : 0.7009          
-#Recall :    0.4252          
-#F1 :        0.5293
+#Precision : 0.2425         
+#Recall :    0.2604          
+#F1 :        0.2511
 
 # ROC area under the curve
-auc(test$EOD, ylp)
-#Area under the curve: 0.5662
+auc(test1$ETR, ylp)
+#Area under the curve: 0.5344
 
 
 ########################
@@ -327,17 +372,17 @@ auc(test$EOD, ylp)
 ########################
 # Create the tree
 start_time <- Sys.time()
-tree <- rpart(EOD ~ State + Sex + Married_DP + Serving_Spouse + Med_Sort + Have_you_been_arres+ Degree_Type + Language_Level + Age + IRT_Score,
+tree <- rpart(ETR ~ Post.y + Sector + Sex + Have_you_been_arres + Education_Level + Diversity + Agebin,
               data = train,
              method="class")
 #Plot the tree.
 rpart.plot(tree)
 
-dt_pred <- as.data.frame(predict(tree, test, type = "p"))
+dt_pred <- as.data.frame(predict(tree, test1, type = "p"))
 end_time <- Sys.time()
 #Decision Tree running time: 0.854085 secs
 end_time - start_time
-dtp <- ifelse(dt_pred$`1` >=0.61, 1, 0)
+dtp <- ifelse(dt_pred$`1` >=0.87, 1, 0)
 result_dt <- confusionMatrix(factor(dtp), factor(test$EOD), mode = "prec_recall", positive="1")
 result_dt
 result_dt <-as.matrix(result_dt, what = "classes")
