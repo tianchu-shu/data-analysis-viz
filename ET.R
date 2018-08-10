@@ -19,6 +19,7 @@ library(rpart)
 library(pROC)
 library(readxl)
 library(stringr)
+library(stringi)
 
 ET <- read_excel("C:/Users/tshu/Downloads/ET data FY 15 to 2018.07.26.xlsx")
 lookup <- read_excel("C:/Users/tshu/Downloads/VOL ID CRN look up table.xlsx")
@@ -77,10 +78,6 @@ df$`Married_DP` <- df$`Married_DP` %>% replace_na("No")
 df$`Serving_Spouse` <- df$`Serving_Spouse` %>% replace_na("No")
 df$`Language_Level` <- df$`Language_Level` %>% replace_na("None")
 df$Med_Sort <- df$Med_Sort %>% replace_na("Nomination Cleared")
-#Only keep the EOD candidates
-df <- df %>% drop_na(EOD_Date)
-#Using the mode 22 to fill the NA for IRT_Score
-#df$IRT_Score <- df$IRT_Score %>% replace_na(22)
 
 
 #Convert the date col to correct type
@@ -120,56 +117,45 @@ df[df$Degree_Type %like% "Licensed", ]$Degree_Type = "Master"
 df[df$Degree_Type %like% "Associate", ]$Degree_Type = "Associate"
 df$Degree_Type[is.na(df$Degree_Type)] = "No Degree"
 
-#Matching the education level
-df[df$Education_Level==2, ]$Education_Level = "High school graduate/GED"
-df[df$Education_Level==3, ]$Education_Level = "Incomplete college study"
-df[df$Education_Level==4, ]$Education_Level = "A.A. degree or equivalent"
-df[df$Education_Level==5, ]$Education_Level = "Third year of college completed"
-df[df$Education_Level==6, ]$Education_Level = "College graduate"
-df[df$Education_Level==7, ]$Education_Level = "Graduate study"
-df[df$Education_Level==8, ]$Education_Level = "Graduate degree"
-df[df$Education_Level==9, ]$Education_Level = "Technical school graduate"
-df[df$Education_Level==99, ]$Education_Level = "Other"
-
-#Combine Med_sort
-df[df$Med_Sort == 'Nomination Clear',]$Med_Sort ="Nomination Cleared"
-df[df$Med_Sort=="Triage"| df$Med_Sort=="Nomination Medical Pending",]$Med_Sort = "Medical Pending"
-df[df$Med_Sort=="No additional validation required, cleared for all countries"| df$Med_Sort=="No additional validation required, support required",]$Med_Sort = "Nomination Cleared"
-df[df$Med_Sort=="Additional validation required, support required"| df$Med_Sort=="null",]$Med_Sort = "Nomination Validation Required"
-df[df$Med_Sort == "Medical pending",]$Med_Sort = "Medical Pending"
 #Merge "Yes" & "Yes_DP"
 df[df$`Serving_Spouse`=="Yes_DP", ]$`Serving_Spouse` = "Yes"
 
 #df$MI <- ifelse(df$MI =="NO", 0, 1)
 
-#Bucket the IRT_Score
-df$IRT <- cut(df$IRT_Score, c(-1,5,10,15,20,25,30))
-summary(df$IRT)
+#Bucket the age
 df$Agebin <- cut(df$Age, c(15,25,30,35,50,81))
 summary(df$Agebin)
 
 #only keep the features we are going to use
-useful <- c("FY","Q", "CRN", "Post", "Sector", "State", "Sex", "Diversity", "Married_DP", "Serving_Spouse", "Med_Sort", "Have_you_been_arres", "Degree_Type", "Education_Level", "Age", "Agebin", "IRT", "IRT_Score", "Language_Level", "EOD" )
+useful <- c("FY","Q", "CRN", "Post", "Sector", "Sex", "Diversity", "Have_you_been_arres", "Degree_Type", "Age", "Agebin" )
 df <- df[, (names(df) %in% useful)]
 df <- unique(df)
 
+#Get rid of the number in post name
+ET$Post <- str_extract(ET$Post, "[A-Z]+")
+ET$Post <- tolower(ET$Post)
+ET$Post <- stri_trans_totitle(ET$Post)
+sum(ET$AS)/length(ET$AS)
+#0.2037412 is Admin Sep percentage of the ET Data since FY15
+#220 are ET because of Admin Sep
+
 ET$ETR <- ifelse(ET$"Assignment Status" =="ET-Resignation", 1,0)
 sum(ET$ETR)/length(ET$ETR)
-#0.201714 is the ET-Resignation percentage of the ET Data since FY15
+#0.201714 is ET-Resignation, 2189
 
-as <- subset(et, `Resignation Reason Primary`=="Resig in lieu of Admin Sep" | `Assignment Status`=="ET-Administrative Separation")
-#220 are ET because of Admin Sep
 key <- rbind(lookup, lookup2)
 key <- key[, -c(1, 2, 3)]
 m <- merge(ET, key, by.x = "Vol Id", by.y = "Volunteer ID")
 et <- merge(m, df, by.x = "Candidate ID", by.y = "CRN", all.x = TRUE)
 et <- merge(m, df, by.x = "Candidate ID", by.y = "CRN")
-
-ET$Post.x <- str_extract(ET$Post.x, "[A-Z]+")
-ET$Post.y <- toupper(ET$Post.y)
-
 #drop the duplicates
 et <- et[!rev(duplicated(rev(et$"Vol Id"))),]
+
+AS <- subset(ET, `Resignation Reason Primary`=="Resig in lieu of Admin Sep" | `Assignment Status`=="ET-Administrative Separation")
+as <- subset(et, `Resignation Reason Primary`=="Resig in lieu of Admin Sep" | `Assignment Status`=="ET-Administrative Separation")
+#220 are ET because of Admin Sep
+
+write.csv(table(AS$Post), file ="ass.csv")
 
 #Data-viz for ET-resignation
 library(ggplot2)
@@ -250,7 +236,7 @@ sum(dtrain$ETR)/length(dtrain$ETR)
 
 #### K-Nearest Neighbor #####
 start_time <- Sys.time()
-knn_pred <- knn(train = train_x, test = test_x,cl = train_y, k=10, prob=TRUE)
+knn_pred <- knn(train = train_x, test = test_x,cl = train_y, k=20, prob=TRUE)
 kp=attr(knn_pred, "prob") 
 end_time <- Sys.time()
 #Knn running time: 3.776 secs
