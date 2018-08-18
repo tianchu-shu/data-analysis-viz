@@ -1,4 +1,3 @@
-# OAE Data Mining Project
 # Written by Tianchu Shu
 # Last Updated July 2018
 
