@@ -1,6 +1,5 @@
-#OAE Data Mining Project
-#Written by Tianchu Shu
-#Last Updated August 16 2018
+# Written by Tianchu Shu
+# Last Updated August 16 2018
 
 #Some of these libraries require the latest version of R
 #Make sure your R Version is at least upgraded to 3.5.0 before running the script
